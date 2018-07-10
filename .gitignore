@@ -1,0 +1,4 @@
+.DS_Store
+.idea/
+data-aws-dynamo-p2p.iml
+target/
