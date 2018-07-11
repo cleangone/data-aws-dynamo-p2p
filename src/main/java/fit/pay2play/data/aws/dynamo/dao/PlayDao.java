@@ -9,7 +9,7 @@ public class PlayDao extends DynamoBaseDao<Play>
 {
     public List<Play> getByUserId(String id)
     {
-        return mapper.scan(Play.class, byUserId(id));
+        return mapper.scan(Play.class, buildEqualsScanExpression("UserId", id));
     }
 }
 

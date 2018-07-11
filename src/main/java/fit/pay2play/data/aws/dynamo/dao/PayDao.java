@@ -7,11 +7,9 @@ import java.util.List;
 
 public class PayDao extends DynamoBaseDao<Pay>
 {
-
-
     public List<Pay> getByUserId(String id)
     {
-        return mapper.scan(Pay.class, byUserId(id));
+        return mapper.scan(Pay.class, buildEqualsScanExpression("UserId", id));
     }
 }
 

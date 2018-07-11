@@ -12,7 +12,7 @@ import java.math.RoundingMode;
 import static java.util.Objects.requireNonNull;
 
 @DynamoDBTable(tableName="Action")
-public class P2pAction extends BaseEntity
+public class Action extends BaseEntity
 {
     private static MathContext TWO_DIGITS = new MathContext(2, RoundingMode.HALF_UP);
 
@@ -28,19 +28,19 @@ public class P2pAction extends BaseEntity
     private BigDecimal value;
 
 
-    public P2pAction()
+    public Action()
     {
         super();
     }
 
-    public P2pAction(Pay pay, int amount)
+    public Action(Pay pay, int amount)
     {
         super();
         init(requireNonNull(pay), amount);
         setPayId(pay.getId());
     }
 
-    public P2pAction(Play play, int amount)
+    public Action(Play play, int amount)
     {
         super();
         init(requireNonNull(play), amount);
@@ -66,11 +66,11 @@ public class P2pAction extends BaseEntity
     }
     @DynamoDBIgnore public BigDecimal getTotalValue()
     {
-        return value.multiply(getPlusMinusAmount(), TWO_DIGITS);
+        return value.multiply(new BigDecimal(getCreditAmount()), TWO_DIGITS);
     }
-    @DynamoDBIgnore public BigDecimal getPlusMinusAmount()
+    @DynamoDBIgnore public int getCreditAmount()
     {
-        return isPay() ? new BigDecimal(amount) : new BigDecimal(amount * -1);
+        return isPay() ? amount : amount * -1;
     }
 
     @DynamoDBAttribute(attributeName = "UserId")
