@@ -17,9 +17,15 @@ public class Play extends BaseNamedEntity
     private BigDecimal value;
 
     public Play() {}
-    public Play(String name)
+    public Play(String name, String userId)
     {
         super(name);
+        setUserId(userId);
+    }
+
+    @DynamoDBIgnore public String getDisplayValue()
+    {
+        return value == null ? "" : value.toString();
     }
 
     public BigDecimal getBigDecimal(EntityField field)
@@ -33,8 +39,6 @@ public class Play extends BaseNamedEntity
         if (VALUE_FIELD.equals(field)) setValue(value);
         else super.setBigDecimal(field, value);
     }
-
-
 
     @DynamoDBAttribute(attributeName = "UserId")
     public String getUserId()

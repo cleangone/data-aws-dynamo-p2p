@@ -1,6 +1,8 @@
 package fit.pay2play.data.manager;
 
 import fit.pay2play.data.aws.dynamo.dao.ActionDao;
+import fit.pay2play.data.aws.dynamo.dao.PayDao;
+import fit.pay2play.data.aws.dynamo.dao.PlayDao;
 import fit.pay2play.data.aws.dynamo.entity.Action;
 import fit.pay2play.data.aws.dynamo.entity.Pay;
 import fit.pay2play.data.aws.dynamo.entity.Play;
@@ -17,6 +19,8 @@ public class Pay2PlayManager
     // todo - need to extract org from cache, move it to base
 //    public static final EntityCache<P2pAction> ACTION_CACHE_BY_USER = new EntityCache<>(EntityType.Action, 100);
 
+    private final PayDao payDao = new PayDao();
+    private final PlayDao playDao = new PlayDao();
     private final ActionDao actionDao = new ActionDao();
 
     public List<Action> getActions(String userId)
@@ -32,6 +36,15 @@ public class Pay2PlayManager
 //        }
 //
 //        return actions;
+    }
+
+    public List<Pay> getPays(String userId)
+    {
+        return payDao.getByUserId(userId);
+    }
+    public List<Play> getPlays(String userId)
+    {
+        return playDao.getByUserId(userId);
     }
 
     public List<Action> getPayActions(String userId)
@@ -65,8 +78,25 @@ public class Pay2PlayManager
             .reduce(BigDecimal.ZERO, BigDecimal::add);
     }
 
+    public void save(Pay pay)
+    {
+        payDao.save(pay);
+    }
+    public void save(Play play)
+    {
+        playDao.save(play);
+    }
     public void save(Action action)
     {
         actionDao.save(action);
+    }
+
+    public void delete(Pay pay)
+    {
+        payDao.delete(pay);
+    }
+    public void delete(Play play)
+    {
+        playDao.delete(play);
     }
 }

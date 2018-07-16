@@ -15,9 +15,9 @@ public class Pay extends Play
     private boolean isRequired;
 
     public Pay() {}
-    public Pay(String name)
+    public Pay(String name, String userId)
     {
-        super(name);
+        super(name, userId);
     }
 
     public boolean getBoolean(EntityField field)
