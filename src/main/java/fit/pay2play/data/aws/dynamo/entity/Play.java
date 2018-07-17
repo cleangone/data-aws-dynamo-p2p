@@ -11,7 +11,7 @@ import java.math.BigDecimal;
 @DynamoDBTable(tableName = "Play")
 public class Play extends BaseNamedEntity
 {
-    public static final EntityField VALUE_FIELD = new EntityField("item.value", "Value");
+    public static final EntityField VALUE_FIELD = new EntityField("play.value", "Value");
 
     private String userId;
     private BigDecimal value;

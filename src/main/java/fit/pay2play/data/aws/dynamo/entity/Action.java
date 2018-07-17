@@ -4,6 +4,7 @@ import com.amazonaws.services.dynamodbv2.datamodeling.DynamoDBAttribute;
 import com.amazonaws.services.dynamodbv2.datamodeling.DynamoDBIgnore;
 import com.amazonaws.services.dynamodbv2.datamodeling.DynamoDBTable;
 import xyz.cleangone.data.aws.dynamo.entity.base.BaseEntity;
+import xyz.cleangone.data.aws.dynamo.entity.base.EntityField;
 
 import java.math.BigDecimal;
 import java.math.MathContext;
@@ -14,6 +15,9 @@ import static java.util.Objects.requireNonNull;
 @DynamoDBTable(tableName="Action")
 public class Action extends BaseEntity
 {
+    public static final EntityField DESC_FIELD = new EntityField("pay.description", "Description");
+    public static final EntityField TOTAL_VALUE_FIELD = new EntityField("pay.totalValue", "Total Value");
+
     private static MathContext TWO_DIGITS = new MathContext(2, RoundingMode.HALF_UP);
 
     private String userId;
@@ -54,6 +58,15 @@ public class Action extends BaseEntity
 
         setName(play.getName());
         setValue(play.getValue());
+    }
+
+    @DynamoDBIgnore public String getPayPlayDisplay()
+    {
+        return isPay() ? "Pay" : "Play";
+    }
+    @DynamoDBIgnore public String getDescription()
+    {
+        return amount + " " + name;
     }
 
     @DynamoDBIgnore public boolean isPay()
