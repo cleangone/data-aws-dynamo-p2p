@@ -12,9 +12,11 @@ import java.math.BigDecimal;
 public class Play extends BaseNamedEntity
 {
     public static final EntityField VALUE_FIELD = new EntityField("play.value", "Value");
+    public static final EntityField PLURAL_NAME_FIELD = new EntityField("play.pluralName", "Name (Plural)");
 
     private String userId;
     private BigDecimal value;
+    protected String pluralName;
 
     public Play() {}
     public Play(String name, String userId)
@@ -26,6 +28,18 @@ public class Play extends BaseNamedEntity
     @DynamoDBIgnore public String getDisplayValue()
     {
         return value == null ? "" : value.toString();
+    }
+
+    public String get(EntityField field)
+    {
+        if (PLURAL_NAME_FIELD.equals(field)) { return getPluralName(); }
+        else { return super.get(field); }
+    }
+
+    public void set(EntityField field, String value)
+    {
+        if (PLURAL_NAME_FIELD.equals(field)) { this.setPluralName(value); }
+        else { super.set(field, value); }
     }
 
     public BigDecimal getBigDecimal(EntityField field)
@@ -58,6 +72,16 @@ public class Play extends BaseNamedEntity
     public void setValue(BigDecimal value)
     {
         this.value = value;
+    }
+
+    @DynamoDBAttribute(attributeName = "PluralName")
+    public String getPluralName()
+    {
+        return pluralName;
+    }
+    public void setPluralName(String pluralName)
+    {
+        this.pluralName = pluralName;
     }
 }
 

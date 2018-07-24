@@ -4,47 +4,77 @@ import fit.pay2play.data.aws.dynamo.dao.ActionDao;
 import fit.pay2play.data.aws.dynamo.dao.PayDao;
 import fit.pay2play.data.aws.dynamo.dao.PlayDao;
 import fit.pay2play.data.aws.dynamo.entity.Action;
+import fit.pay2play.data.aws.dynamo.entity.DayAction;
 import fit.pay2play.data.aws.dynamo.entity.Pay;
 import fit.pay2play.data.aws.dynamo.entity.Play;
+import xyz.cleangone.data.aws.dynamo.entity.lastTouched.EntityType;
+import xyz.cleangone.data.cache.EntityCache;
 
 import java.math.BigDecimal;
-import java.util.List;
+import java.util.*;
+import java.util.concurrent.Executors;
+import java.util.concurrent.ScheduledExecutorService;
 import java.util.function.Predicate;
 import java.util.stream.Collectors;
 
-import static java.util.Objects.requireNonNull;
+import static java.util.concurrent.TimeUnit.SECONDS;
 
 public class Pay2PlayManager
 {
-    // todo - need to extract org from cache, move it to base
-//    public static final EntityCache<P2pAction> ACTION_CACHE_BY_USER = new EntityCache<>(EntityType.Action, 100);
+    public static final EntityCache<Pay> PAY_CACHE_BY_USER = new EntityCache<>(EntityType.ACTION, 100);
+    public static final EntityCache<Play> PLAY_CACHE_BY_USER = new EntityCache<>(EntityType.ACTION, 100);
+    public static final EntityCache<Action> ACTION_CACHE_BY_USER = new EntityCache<>(EntityType.ACTION, 100);
 
     private final PayDao payDao = new PayDao();
     private final PlayDao playDao = new PlayDao();
     private final ActionDao actionDao = new ActionDao();
+    private final ScheduledExecutorService scheduler = Executors.newSingleThreadScheduledExecutor();
 
+    // todo verify default sort is latest first
     public List<Action> getActions(String userId)
     {
-        return actionDao.getByUserId(userId);
+        Date start = new Date();
+        List<Action> actions = ACTION_CACHE_BY_USER.get(userId);
+        if (actions == null)
+        {
+            actions = actionDao.getByUserId(userId);
+            ACTION_CACHE_BY_USER.put(userId, actions, start);
+        }
 
-//        Date start = new Date();
-//        List<P2pAction> actions = ACTION_CACHE_BY_USER.get(targetEvent, org.getId());
-//        if (actions == null)
-//        {
-//            actions = actionDao.getByUserId(userId);
-//            ACTION_CACHE_BY_USER.put(targetEvent, actions, org.getId(), start);
-//        }
-//
-//        return actions;
+        return actions;
     }
 
     public List<Pay> getPays(String userId)
     {
-        return payDao.getByUserId(userId);
+        Date start = new Date();
+        List<Pay> pays = PAY_CACHE_BY_USER.get(userId);
+        if (pays == null)
+        {
+            pays = payDao.getByUserId(userId);
+            PAY_CACHE_BY_USER.put(userId, pays, start);
+        }
+
+        return pays;
     }
+
     public List<Play> getPlays(String userId)
     {
-        return playDao.getByUserId(userId);
+        Date start = new Date();
+        List<Play> plays = PLAY_CACHE_BY_USER.get(userId);
+        if (plays == null)
+        {
+            plays = playDao.getByUserId(userId);
+            PLAY_CACHE_BY_USER.put(userId, plays, start);
+        }
+
+        return plays;
+    }
+
+    public List<Action> getActions(String userId, Date date)
+    {
+        return getActions(userId).stream()
+            .filter(a -> a.isSameDay(date))
+            .collect(Collectors.toList());
     }
 
     public List<Action> getPayActions(String userId)
@@ -62,13 +92,19 @@ public class Pay2PlayManager
             .collect(Collectors.toList());
     }
 
-    public void createPayAction(Pay pay, int amount)
+    public void createAction(Pay pay)
     {
-        save(new Action(pay, amount));
+        create(new Action(pay));
     }
-    public void createPlayAction(Play play, int amount)
+    public void createAction(Play play)
     {
-        save(new Action(play, amount));
+        create(new Action(play));
+    }
+
+    private void create(Action action)
+    {
+        save(action);
+        schedule(new ActionCombiner(action, actionDao));
     }
 
     public static BigDecimal sumTotalValue(List<Action> actions)
@@ -76,6 +112,28 @@ public class Pay2PlayManager
         return actions.stream()
             .map(Action::getTotalValue)
             .reduce(BigDecimal.ZERO, BigDecimal::add);
+    }
+
+    public List<DayAction> getDayActions(String userId)
+    {
+        Map<String, DayAction> dayActionByYearDay = new HashMap<>();
+
+        for (Action action : getActions(userId))
+        {
+            DayAction data = new DayAction(action);
+            if (dayActionByYearDay.containsKey(data.getYearAndDay()))
+            {
+                dayActionByYearDay.get(data.getYearAndDay()).add(data);
+            }
+            else
+            {
+                dayActionByYearDay.put(data.getYearAndDay(), data);
+            }
+        }
+
+        ArrayList<DayAction> dayActions = new ArrayList<>(dayActionByYearDay.values());
+        Collections.sort(dayActions, (d1, d2) -> d1.getYearAndDay().compareTo(d2.getYearAndDay()));
+        return dayActions;
     }
 
     public void save(Pay pay)
@@ -94,9 +152,23 @@ public class Pay2PlayManager
     public void delete(Pay pay)
     {
         payDao.delete(pay);
+        PAY_CACHE_BY_USER.clear(pay.getUserId());
     }
+
     public void delete(Play play)
     {
         playDao.delete(play);
+        PLAY_CACHE_BY_USER.clear(play.getUserId());
+    }
+
+    public void delete(Action action)
+    {
+        actionDao.delete(action);
+        ACTION_CACHE_BY_USER.clear(action.getUserId());
+    }
+
+     private void schedule(Runnable runnable)
+    {
+        scheduler.schedule(runnable, 1, SECONDS);
     }
 }
