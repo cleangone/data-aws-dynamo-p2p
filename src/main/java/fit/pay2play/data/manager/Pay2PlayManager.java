@@ -50,7 +50,9 @@ public class Pay2PlayManager
         List<Pay> pays = PAY_CACHE_BY_USER.get(userId);
         if (pays == null)
         {
-            pays = payDao.getByUserId(userId);
+            pays = new ArrayList<>(payDao.getByUserId(userId));
+            pays.sort(Pay::compareTo);
+
             PAY_CACHE_BY_USER.put(userId, pays, start);
         }
 
@@ -63,7 +65,8 @@ public class Pay2PlayManager
         List<Play> plays = PLAY_CACHE_BY_USER.get(userId);
         if (plays == null)
         {
-            plays = playDao.getByUserId(userId);
+            plays = new ArrayList<>(playDao.getByUserId(userId));
+            plays.sort(Play::compareTo);
             PLAY_CACHE_BY_USER.put(userId, plays, start);
         }
 
@@ -75,6 +78,9 @@ public class Pay2PlayManager
         return getActions(userId).stream()
             .filter(a -> a.isSameDay(date))
             .collect(Collectors.toList());
+
+//        actions.sort(Comparator.comparing(Action::getUpdatedDate));
+//        return actions;
     }
 
     public List<Action> getPayActions(String userId)
@@ -92,19 +98,37 @@ public class Pay2PlayManager
             .collect(Collectors.toList());
     }
 
-    public void createAction(Pay pay)
+    public void addAction(Pay pay)
     {
-        create(new Action(pay));
+        addAction(new Action(pay));
     }
-    public void createAction(Play play)
+    public void addAction(Play play)
     {
-        create(new Action(play));
+        addAction(new Action(play));
     }
 
-    private void create(Action action)
+    // create new action or combine with existing
+    private void addAction(Action action)
     {
-        save(action);
-        schedule(new ActionCombiner(action, actionDao));
+        List<Action> matchingActions = getActions(action.getUserId(), new Date()).stream()
+            .filter(a -> action.samePayPlay(a))
+            .collect(Collectors.toList());
+
+        if (matchingActions.isEmpty())
+        {
+            save(action);
+        }
+        else
+        {
+            // should only be one, but okay if multiple
+            Action matchingAction = matchingActions.get(0);
+
+            System.out.println("Combining new Action with Action " + matchingAction.getId());
+            matchingAction.setAmount(matchingAction.getAmount() + action.getAmount());
+            save(matchingAction);
+        }
+
+        //        schedule(new ActionCombiner(action, actionDao));
     }
 
     public static BigDecimal sumTotalValue(List<Action> actions)
@@ -132,7 +156,8 @@ public class Pay2PlayManager
         }
 
         ArrayList<DayAction> dayActions = new ArrayList<>(dayActionByYearDay.values());
-        Collections.sort(dayActions, (d1, d2) -> d1.getYearAndDay().compareTo(d2.getYearAndDay()));
+        dayActions.sort(Comparator.comparing(DayAction::getYearAndDay));
+
         return dayActions;
     }
 

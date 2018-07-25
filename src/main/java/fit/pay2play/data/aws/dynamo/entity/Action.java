@@ -91,12 +91,18 @@ public class Action extends Play
         return isPay() ? amount : amount * -1;
     }
 
+    @DynamoDBIgnore public boolean samePayPlay(Action that)
+    {
+        return (
+            getUserId().equals(that.getUserId()) &&
+            equals(payId, that.getPayId()) &&
+            equals(playId, that.getPlayId()));
+    }
+
     @DynamoDBIgnore public boolean canCombineWith(Action that)
     {
         return (!getId().equals(that.getId()) &&
-            getUserId().equals(that.getUserId()) &&
-            equals(payId, that.getPayId()) &&
-            equals(playId, that.getPlayId()) &&
+            samePayPlay(that) &&
             getValue().equals(that.getValue()) &&
             isSameDay(that));
     }
