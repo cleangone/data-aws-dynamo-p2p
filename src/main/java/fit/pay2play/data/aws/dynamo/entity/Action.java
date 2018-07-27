@@ -3,6 +3,7 @@ package fit.pay2play.data.aws.dynamo.entity;
 import com.amazonaws.services.dynamodbv2.datamodeling.DynamoDBAttribute;
 import com.amazonaws.services.dynamodbv2.datamodeling.DynamoDBIgnore;
 import com.amazonaws.services.dynamodbv2.datamodeling.DynamoDBTable;
+import xyz.cleangone.data.aws.dynamo.entity.base.BaseEntity;
 import xyz.cleangone.data.aws.dynamo.entity.base.EntityField;
 
 import java.math.BigDecimal;
@@ -14,7 +15,7 @@ import java.util.Date;
 import static java.util.Objects.requireNonNull;
 
 @DynamoDBTable(tableName="Action")
-public class Action extends Play
+public class Action extends BaseEntity
 {
     public static final EntityField DESC_FIELD = new EntityField("action.description", "Description");
     public static final EntityField AMOUNT_FIELD = new EntityField("action.amount", "Amount");
@@ -22,50 +23,47 @@ public class Action extends Play
 
     private static MathContext TWO_DIGITS = new MathContext(2, RoundingMode.HALF_UP);
 
+    private String userId;
     private String payId;  // either pay or play will be used
     private String playId;
     private int amount;
 
-    // todo: name, pluralName and Value duplicated here in case Pay/Play changed
-    // todo: do something to ledger entities so this data not repeated forever
+    protected String name;  // transient
+    protected String pluralName; // transient
+    private BigDecimal value; // transient
 
     public Action()
     {
         super();
     }
+
     public Action(Pay pay)
     {
-        this(pay, 1);
+        super();
+        setUserId(requireNonNull(pay).getUserId());
+        setPayId(pay.getId());
+        setAmount(1);
     }
+
     public Action(Play play)
     {
-        this(play, 1);
-    }
-
-    public Action(Pay pay, int amount)
-    {
         super();
-        init(requireNonNull(pay), amount);
-        setPayId(pay.getId());
-    }
-
-    public Action(Play play, int amount)
-    {
-        super();
-        init(requireNonNull(play), amount);
+        setUserId(requireNonNull(play).getUserId());
         setPlayId(play.getId());
+        setAmount(1);
     }
 
-    private void init(Play play, int amount)
+    public void populate(Play play)
     {
-        setUserId(play.getUserId());
-        setAmount(amount);
-
-        setName(play.getName());
-        setPluralName(play.getPluralName());
-        setValue(play.getValue());
+        setName(play == null ? "Unknown" : play.getName());
+        setPluralName(play == null ? null : play.getPluralName());
+        setValue(play == null ? new BigDecimal(0) : play.getValue());
     }
 
+    @DynamoDBIgnore public String getPayPlayId()
+    {
+        return isPay() ? payId : playId;
+    }
     @DynamoDBIgnore public String getPayPlayDisplay()
     {
         return isPay() ? "Pay" : "Play";
@@ -103,7 +101,6 @@ public class Action extends Play
     {
         return (!getId().equals(that.getId()) &&
             samePayPlay(that) &&
-            getValue().equals(that.getValue()) &&
             isSameDay(that));
     }
 
@@ -142,6 +139,16 @@ public class Action extends Play
         else super.setInt(field, value);
     }
 
+    @DynamoDBAttribute(attributeName = "UserId")
+    public String getUserId()
+    {
+        return userId;
+    }
+    public void setUserId(String userId)
+    {
+        this.userId = userId;
+    }
+
     @DynamoDBAttribute(attributeName = "PayId")
     public String getPayId()
     {
@@ -170,6 +177,34 @@ public class Action extends Play
     public void setAmount(int amount)
     {
         this.amount = amount;
+    }
+
+    @DynamoDBIgnore
+    public String getName() {
+        return this.name;
+    }
+    public void setName(String name) {
+        this.name = name;
+    }
+
+    @DynamoDBIgnore
+    public String getPluralName()
+    {
+        return pluralName;
+    }
+    public void setPluralName(String pluralName)
+    {
+        this.pluralName = pluralName;
+    }
+
+    @DynamoDBIgnore
+    public BigDecimal getValue()
+    {
+        return value;
+    }
+    public void setValue(BigDecimal value)
+    {
+        this.value = value;
     }
 }
 

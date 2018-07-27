@@ -12,13 +12,16 @@ import java.math.BigDecimal;
 public class Play extends BaseNamedEntity
 {
     public static final EntityField VALUE_FIELD = new EntityField("play.value", "Value");
+    public static final EntityField SHORT_NAME_FIELD = new EntityField("play.shortName", "Short Name");
     public static final EntityField PLURAL_NAME_FIELD = new EntityField("play.pluralName", "Name (Plural)");
     public static final EntityField DISPLAY_ORDER_FIELD = new EntityField("play.displayOrder", "Display Order");
 
     private String userId;
     private BigDecimal value;
-    protected String pluralName;
+    private String shortName;
+    private String pluralName;
     private String displayOrder;
+    private boolean hasActions; // transient
 
     public Play() {}
     public Play(String name, String userId)
@@ -27,6 +30,10 @@ public class Play extends BaseNamedEntity
         setUserId(userId);
     }
 
+    @DynamoDBIgnore public String getDisplayShortName()
+    {
+        return shortName == null ? getName() : shortName;
+    }
     @DynamoDBIgnore public String getDisplayValue()
     {
         return value == null ? "" : value.toString();
@@ -42,14 +49,16 @@ public class Play extends BaseNamedEntity
 
     public String get(EntityField field)
     {
-        if (PLURAL_NAME_FIELD.equals(field)) { return getPluralName(); }
+        if (SHORT_NAME_FIELD.equals(field)) { return getShortName(); }
+        else if (PLURAL_NAME_FIELD.equals(field)) { return getPluralName(); }
         else if (DISPLAY_ORDER_FIELD.equals(field)) { return getDisplayOrder(); }
         else { return super.get(field); }
     }
 
     public void set(EntityField field, String value)
     {
-        if (PLURAL_NAME_FIELD.equals(field)) { this.setPluralName(value); }
+        if (SHORT_NAME_FIELD.equals(field)) { this.setShortName(value); }
+        else if (PLURAL_NAME_FIELD.equals(field)) { this.setPluralName(value); }
         else if (DISPLAY_ORDER_FIELD.equals(field)) { this.setDisplayOrder(value); }
         else { super.set(field, value); }
     }
@@ -86,14 +95,14 @@ public class Play extends BaseNamedEntity
         this.value = value;
     }
 
-    @DynamoDBAttribute(attributeName = "DisplayOrder")
-    public String getDisplayOrder()
+    @DynamoDBAttribute(attributeName = "ShortName")
+    public String getShortName()
     {
-        return displayOrder;
+        return shortName;
     }
-    public void setDisplayOrder(String displayOrder)
+    public void setShortName(String shortName)
     {
-        this.displayOrder = displayOrder;
+        this.shortName = shortName;
     }
 
     @DynamoDBAttribute(attributeName = "PluralName")
@@ -104,6 +113,26 @@ public class Play extends BaseNamedEntity
     public void setPluralName(String pluralName)
     {
         this.pluralName = pluralName;
+    }
+
+    @DynamoDBAttribute(attributeName = "DisplayOrder")
+    public String getDisplayOrder()
+    {
+        return displayOrder;
+    }
+    public void setDisplayOrder(String displayOrder)
+    {
+        this.displayOrder = displayOrder;
+    }
+
+    @DynamoDBIgnore
+    public boolean getHasActions()
+    {
+        return hasActions;
+    }
+    public void setHasActions(boolean hasActions)
+    {
+        this.hasActions = hasActions;
     }
 }
 
