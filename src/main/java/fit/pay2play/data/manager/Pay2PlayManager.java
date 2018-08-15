@@ -1,8 +1,7 @@
 package fit.pay2play.data.manager;
 
 import fit.pay2play.data.aws.dynamo.dao.ActionDao;
-import fit.pay2play.data.aws.dynamo.dao.PayDao;
-import fit.pay2play.data.aws.dynamo.dao.PlayDao;
+import fit.pay2play.data.aws.dynamo.dao.ActionCategoryDao;
 import fit.pay2play.data.aws.dynamo.entity.*;
 import xyz.cleangone.data.aws.dynamo.entity.lastTouched.EntityType;
 import xyz.cleangone.data.cache.EntityCache;
@@ -12,7 +11,6 @@ import java.util.*;
 import java.util.concurrent.Executors;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.function.Function;
-import java.util.function.Predicate;
 import java.util.stream.Collectors;
 
 import static java.util.concurrent.TimeUnit.SECONDS;
@@ -22,12 +20,10 @@ public class Pay2PlayManager
     private static final Integer MAX_ENTITIES = 100;
     private static final long CACHE_LOOKUP_BYPASS_10_MINUTES = 1000 * 60 * 10;
 
-    private static final EntityCache<Pay> PAY_CACHE_BY_USER = new EntityCache<>(P2PEntityType.PAY, MAX_ENTITIES, CACHE_LOOKUP_BYPASS_10_MINUTES);
-    private static final EntityCache<Play> PLAY_CACHE_BY_USER = new EntityCache<>(P2PEntityType.PLAY, MAX_ENTITIES, CACHE_LOOKUP_BYPASS_10_MINUTES);
+    private static final EntityCache<ActionCategory> ACTION_CATEGORY_CACHE_BY_USER = new EntityCache<>(P2PEntityType.ACTION_CATEGORY, MAX_ENTITIES, CACHE_LOOKUP_BYPASS_10_MINUTES);
     private static final EntityCache<Action> ACTION_CACHE_BY_USER = new EntityCache<>(EntityType.ACTION, MAX_ENTITIES, CACHE_LOOKUP_BYPASS_10_MINUTES);
 
-    private final PayDao payDao = new PayDao();
-    private final PlayDao playDao = new PlayDao();
+    private final ActionCategoryDao actionCategoryDao = new ActionCategoryDao();
     private final ActionDao actionDao = new ActionDao();
     private final ScheduledExecutorService scheduler = Executors.newSingleThreadScheduledExecutor();
 
@@ -45,60 +41,33 @@ public class Pay2PlayManager
         return actions;
     }
 
-    public List<Pay> getPays(String userId)
+    public List<ActionCategory> getActionCategories(String userId)
     {
         Date start = new Date();
-        List<Pay> pays = PAY_CACHE_BY_USER.get(userId);
-        if (pays == null)
+        List<ActionCategory> actionTypes = ACTION_CATEGORY_CACHE_BY_USER.get(userId);
+        if (actionTypes == null)
         {
-            pays = new ArrayList<>(payDao.getByUserId(userId));
-            pays.sort(Pay::compareTo);
+            actionTypes = new ArrayList<>(actionCategoryDao.getByUserId(userId));
+            actionTypes.sort(ActionCategory::compareTo);
 
-            PAY_CACHE_BY_USER.put(userId, pays, start);
+            ACTION_CATEGORY_CACHE_BY_USER.put(userId, actionTypes, start);
         }
 
-        return pays;
+        return actionTypes;
     }
 
-    public List<Play> getPlays(String userId)
+    public List<ActionCategory> getActionCategories(String userId, ActionType actionType)
     {
-        Date start = new Date();
-        List<Play> plays = PLAY_CACHE_BY_USER.get(userId);
-        if (plays == null)
-        {
-            plays = new ArrayList<>(playDao.getByUserId(userId));
-            plays.sort(Play::compareTo);
-
-            PLAY_CACHE_BY_USER.put(userId, plays, start);
-        }
-
-        return plays;
+        return getActionCategories(userId).stream()
+            .filter(a -> a.isActionType(actionType))
+            .collect(Collectors.toList());
     }
 
-    // for now, determine actions each time
-    public List<Pay> getPaysWithActions(String userId)
+    public Set<String> getActiveActionCategoryIds(String userId)
     {
-         Set<String> usedPayIds = getPayActions(userId).stream()
-             .map(Action::getPayId)
-             .collect(Collectors.toSet());
-
-        List<Pay> pays = getPays(userId);
-        pays.forEach(p -> p.setHasActions(usedPayIds.contains(p.getId())));
-
-        return pays;
-    }
-
-    // for now, determine actions each time
-    public List<Play> getPlaysWithActions(String userId)
-    {
-        Set<String> usedPlayIds = getPlayActions(userId).stream()
-            .map(Action::getPlayId)
+        return getActions(userId).stream()
+            .map(Action::getActionCategoryId)
             .collect(Collectors.toSet());
-
-        List<Play> plays = getPlays(userId);
-        plays.forEach(p -> p.setHasActions(usedPlayIds.contains(p.getId())));
-
-        return plays;
     }
 
     public List<Action> getActions(String userId, Date date)
@@ -122,62 +91,46 @@ public class Pay2PlayManager
     }
     private List<Action> getPopulatedActions(String userId, List<Action> actions)
     {
-        // pays and plays in one map - ids are all unique
-        Map<String, Play> paysAndPlaysById = getPlays(userId).stream()
-            .collect(Collectors.toMap(Play::getId, Function.identity()));
-        for (Pay pay : getPays(userId)) { paysAndPlaysById.put(pay.getId(), pay); }
+        Map<String, ActionCategory> actionTypesById = getActionCategories(userId).stream()
+            .collect(Collectors.toMap(ActionCategory::getId, Function.identity()));
 
         for (Action action : actions)
         {
-            action.populate(paysAndPlaysById.get(action.getPayPlayId()));
+            if (action.getActionCategoryId() != null)
+            {
+                action.populate(actionTypesById.get(action.getActionCategoryId()));
+            }
         }
 
         return actions;
     }
 
-    public List<Pay> getEnabledPays(String userId)
+    public void createActionCategory(String name, String userId, ActionType actionType)
     {
-        return getPays(userId).stream()
-            .filter(Pay::getEnabled)
+        save(new ActionCategory(name, userId, actionType));
+    }
+
+    public List<ActionCategory> getEnabledActionCategories(String userId, ActionType actionType)
+    {
+        return getActionCategories(userId, actionType).stream()
+            .filter(ActionCategory::getEnabled)
             .collect(Collectors.toList());
     }
 
-    public List<Play> getEnabledPlays(String userId)
-    {
-        return getPlays(userId).stream()
-            .filter(Play::getEnabled)
-            .collect(Collectors.toList());
-    }
-
-    public List<Action> getPayActions(String userId)
-    {
-        return getActions(userId, Action::isPay);
-    }
-    public List<Action> getPlayActions(String userId)
-    {
-        return getActions(userId, Action::isPlay);
-    }
-    private List<Action> getActions(String userId, Predicate<Action> predicate)
+    private List<Action> getActions(String userId, ActionType ActionType)
     {
         return getActions(userId).stream()
-            .filter(predicate)
+            .filter(a -> a.isActionType(ActionType))
             .collect(Collectors.toList());
-    }
-
-    public void addAction(Pay pay)
-    {
-        addAction(new Action(pay));
-    }
-    public void addAction(Play play)
-    {
-        addAction(new Action(play));
     }
 
     // create new action or combine with existing
-    private void addAction(Action action)
+    public void addAction(ActionCategory actionCategory)
     {
+        Action action = new Action(actionCategory);
+
         List<Action> matchingActions = getActions(action.getUserId(), new Date()).stream()
-            .filter(a -> action.samePayPlay(a))
+            .filter(a -> action.sameActionType(a))
             .collect(Collectors.toList());
 
         if (matchingActions.isEmpty())
@@ -194,7 +147,7 @@ public class Pay2PlayManager
             save(matchingAction);
         }
 
-        //        schedule(new ActionCombiner(action, actionDao));
+        // schedule(new ActionCombiner(action, actionDao));
     }
 
     public static BigDecimal sumTotalValue(List<Action> actions)
@@ -210,14 +163,14 @@ public class Pay2PlayManager
 
         for (Action action : getPopulatedActions(userId))
         {
-            DayAction data = new DayAction(action);
-            if (dayActionByYearDay.containsKey(data.getYearAndDay()))
+            DayAction dayAction = new DayAction(action);
+            if (dayActionByYearDay.containsKey(dayAction.getYearAndDay()))
             {
-                dayActionByYearDay.get(data.getYearAndDay()).add(data);
+                dayActionByYearDay.get(dayAction.getYearAndDay()).add(dayAction);
             }
             else
             {
-                dayActionByYearDay.put(data.getYearAndDay(), data);
+                dayActionByYearDay.put(dayAction.getYearAndDay(), dayAction);
             }
         }
 
@@ -231,16 +184,10 @@ public class Pay2PlayManager
     // all saves and deletes clear the cache - bypass time set to 10 minutes, so cache is
     // effectively running without checking entityLastTouched
     //
-    public void save(Pay pay)
+    public void save(ActionCategory actionCategory)
     {
-        payDao.save(pay);
-        PAY_CACHE_BY_USER.clear(pay.getUserId());
-    }
-
-    public void save(Play play)
-    {
-        playDao.save(play);
-        PLAY_CACHE_BY_USER.clear(play.getUserId());
+        actionCategoryDao.save(actionCategory);
+        ACTION_CATEGORY_CACHE_BY_USER.clear(actionCategory.getUserId());
     }
 
     public void save(Action action)
@@ -249,16 +196,10 @@ public class Pay2PlayManager
         ACTION_CACHE_BY_USER.clear(action.getUserId());
     }
 
-    public void delete(Pay pay)
+    public void delete(ActionCategory actionCategory)
     {
-        payDao.delete(pay);
-        PAY_CACHE_BY_USER.clear(pay.getUserId());
-    }
-
-    public void delete(Play play)
-    {
-        playDao.delete(play);
-        PLAY_CACHE_BY_USER.clear(play.getUserId());
+        actionCategoryDao.delete(actionCategory);
+        ACTION_CATEGORY_CACHE_BY_USER.clear(actionCategory.getUserId());
     }
 
     public void delete(Action action)

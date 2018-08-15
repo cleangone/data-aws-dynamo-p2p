@@ -24,12 +24,12 @@ public class Action extends BaseEntity
     private static MathContext TWO_DIGITS = new MathContext(2, RoundingMode.HALF_UP);
 
     private String userId;
-    private String payId;  // either pay or play will be used
-    private String playId;
+    private String actionCategoryId;
     private int amount;
 
     protected String name;  // transient
     protected String pluralName; // transient
+    protected ActionType actionType; // transient
     private BigDecimal value; // transient
 
     public Action()
@@ -37,48 +37,28 @@ public class Action extends BaseEntity
         super();
     }
 
-    public Action(Pay pay)
+    public Action(ActionCategory actionType)
     {
         super();
-        setUserId(requireNonNull(pay).getUserId());
-        setPayId(pay.getId());
+        setUserId(requireNonNull(actionType).getUserId());
+        setActionCategoryId(actionType.getId());
         setAmount(1);
     }
 
-    public Action(Play play)
+    public void populate(ActionCategory actionCategory)
     {
-        super();
-        setUserId(requireNonNull(play).getUserId());
-        setPlayId(play.getId());
-        setAmount(1);
+        if (actionCategory == null) { return; }
+        if (!actionCategoryId.equals(actionCategory.getId())) { throw new RuntimeException("cannot populate Action with non-matching ActionType"); }
+
+        setName(actionCategory.getName());
+        setPluralName(actionCategory.getPluralName());
+        setActionType(actionCategory.getActionType());
+        setValue(actionCategory.getValue());
     }
 
-    public void populate(Play play)
-    {
-        setName(play == null ? "Unknown" : play.getName());
-        setPluralName(play == null ? null : play.getPluralName());
-        setValue(play == null ? new BigDecimal(0) : play.getValue());
-    }
-
-    @DynamoDBIgnore public String getPayPlayId()
-    {
-        return isPay() ? payId : playId;
-    }
-    @DynamoDBIgnore public String getPayPlayDisplay()
-    {
-        return isPay() ? "Pay" : "Play";
-    }
     @DynamoDBIgnore public String getDescription()
     {
         return amount + " " + (amount == 1 || getPluralName() == null ? getName() : getPluralName());
-    }
-    @DynamoDBIgnore public boolean isPay()
-    {
-        return payId != null;
-    }
-    @DynamoDBIgnore public boolean isPlay()
-    {
-        return playId != null;
     }
     @DynamoDBIgnore public BigDecimal getTotalValue()
     {
@@ -86,21 +66,26 @@ public class Action extends BaseEntity
     }
     @DynamoDBIgnore public int getCreditAmount()
     {
-        return isPay() ? amount : amount * -1;
+        return isActionType(ActionType.Pay) ? amount : amount * -1;
+    }
+    @DynamoDBIgnore public boolean sameActionType(Action that)
+    {
+        return userId.equals(that.getUserId()) && actionCategoryId.equals(that.getActionCategoryId());
+    }
+    @DynamoDBIgnore public boolean isActionType(ActionType actionType)
+    {
+        return this.actionType == actionType;
     }
 
-    @DynamoDBIgnore public boolean samePayPlay(Action that)
+    @DynamoDBIgnore public String getActionTypeDisplay()
     {
-        return (
-            getUserId().equals(that.getUserId()) &&
-            equals(payId, that.getPayId()) &&
-            equals(playId, that.getPlayId()));
+        return "" + actionType;
     }
 
     @DynamoDBIgnore public boolean canCombineWith(Action that)
     {
         return (!getId().equals(that.getId()) &&
-            samePayPlay(that) &&
+            sameActionType(that) &&
             isSameDay(that));
     }
 
@@ -149,24 +134,14 @@ public class Action extends BaseEntity
         this.userId = userId;
     }
 
-    @DynamoDBAttribute(attributeName = "PayId")
-    public String getPayId()
+    @DynamoDBAttribute(attributeName = "ActionCategoryId")
+    public String getActionCategoryId()
     {
-        return payId;
+        return actionCategoryId;
     }
-    public void setPayId(String payId)
+    public void setActionCategoryId(String actionCategoryId)
     {
-        this.payId = payId;
-    }
-
-    @DynamoDBAttribute(attributeName = "PlayId")
-    public String getPlayId()
-    {
-        return playId;
-    }
-    public void setPlayId(String playId)
-    {
-        this.playId = playId;
+        this.actionCategoryId = actionCategoryId;
     }
 
     @DynamoDBAttribute(attributeName = "Amount")
@@ -198,9 +173,19 @@ public class Action extends BaseEntity
     }
 
     @DynamoDBIgnore
+    public ActionType getActionType()
+    {
+        return actionType;
+    }
+    public void setActionType(ActionType actionType)
+    {
+        this.actionType = actionType;
+    }
+
+    @DynamoDBIgnore
     public BigDecimal getValue()
     {
-        return value;
+        return value == null ? new BigDecimal(0) : value;
     }
     public void setValue(BigDecimal value)
     {

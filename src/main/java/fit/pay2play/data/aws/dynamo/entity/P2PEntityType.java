@@ -4,8 +4,7 @@ import xyz.cleangone.data.aws.dynamo.entity.lastTouched.EntityType;
 
 public class P2PEntityType extends EntityType
 {
-    public static final EntityType PAY = new EntityType("Pay");
-    public static final EntityType PLAY = new EntityType("Play");
+    public static final EntityType ACTION_CATEGORY = new EntityType("ActionCategory");
 
     public P2PEntityType(String name)
     {
