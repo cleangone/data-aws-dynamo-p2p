@@ -27,21 +27,24 @@ public class Action extends BaseEntity
     private String actionCategoryId;
     private int amount;
 
+    // todo -  use of ActionCategory instead of other transient vars
     protected String name;  // transient
     protected String pluralName; // transient
     protected ActionType actionType; // transient
     private BigDecimal value; // transient
+    private ActionCategory actionCategory; // transient
+    private boolean isAdjustment; // transient  // todo - ugly
 
     public Action()
     {
         super();
     }
 
-    public Action(ActionCategory actionType)
+    public Action(ActionCategory actionCategory)
     {
         super();
-        setUserId(requireNonNull(actionType).getUserId());
-        setActionCategoryId(actionType.getId());
+        setUserId(requireNonNull(actionCategory).getUserId());
+        setActionCategoryId(actionCategory.getId());
         setAmount(1);
     }
 
@@ -50,6 +53,7 @@ public class Action extends BaseEntity
         if (actionCategory == null) { return; }
         if (!actionCategoryId.equals(actionCategory.getId())) { throw new RuntimeException("cannot populate Action with non-matching ActionType"); }
 
+        this.actionCategory = actionCategory;
         setName(actionCategory.getName());
         setPluralName(actionCategory.getPluralName());
         setActionType(actionCategory.getActionType());
@@ -58,15 +62,56 @@ public class Action extends BaseEntity
 
     @DynamoDBIgnore public String getDescription()
     {
+        // todo - ugly
+        if (isAdjustment)
+        {
+            return getName() + " - Target " +
+                (actionCategory.isActionType(ActionType.Pay) ? "Min" : "Max") +
+                " Amount: " + actionCategory.getTargetAmount();
+        }
+
         return amount + " " + (amount == 1 || getPluralName() == null ? getName() : getPluralName());
     }
+
+    @DynamoDBIgnore public Action getAdjustment()
+    {
+        if (!actionCategory.isActionType(ActionType.Pay) ||
+            !hasTargetAmount() ||
+            amount >= actionCategory.getTargetAmount())
+        {
+           return null;
+        }
+
+        Action adjustment = new Action(actionCategory);
+        adjustment.setCreatedDate(getCreatedDate());
+        adjustment.setUpdatedDate(getUpdatedDate());
+        adjustment.setAmount(amount - actionCategory.getTargetAmount());
+        adjustment.populate(actionCategory);
+        adjustment.setAdjustment(true);
+
+        return adjustment;
+    }
+
     @DynamoDBIgnore public BigDecimal getTotalValue()
     {
         return getValue().multiply(new BigDecimal(getCreditAmount()), TWO_DIGITS);
     }
+
     @DynamoDBIgnore public int getCreditAmount()
     {
-        return isActionType(ActionType.Pay) ? amount : amount * -1;
+        int penalty = 0;
+//        if (actionCategory.isActionType(ActionType.Pay) && hasTargetAmount() && amount < actionCategory.getTargetAmount())
+//        {
+//            penalty = actionCategory.getTargetAmount() - amount;
+//        }
+
+        int adjustedAmount = amount - penalty;
+        return isActionType(ActionType.Pay) ? adjustedAmount : adjustedAmount * -1;
+    }
+
+    @DynamoDBIgnore public boolean hasTargetAmount()
+    {
+        return actionCategory != null && actionCategory.getTargetAmount() != null && actionCategory.getTargetAmount() != 0;
     }
     @DynamoDBIgnore public boolean sameActionType(Action that)
     {
@@ -190,6 +235,16 @@ public class Action extends BaseEntity
     public void setValue(BigDecimal value)
     {
         this.value = value;
+    }
+
+    @DynamoDBIgnore
+    public boolean isAdjustment()
+    {
+        return isAdjustment;
+    }
+    public void setAdjustment(boolean adjustment)
+    {
+        isAdjustment = adjustment;
     }
 }
 

@@ -81,6 +81,24 @@ public class Pay2PlayManager
     // TODO - have gone back & forth on whether pay/play info should be duplicated in action
     // TODO - may want to duplicate and update actions in background if pay/play updated
     //
+
+    // todo - need to add sep adjustment after anything with a min/max
+    public List<Action> getActionsWithAdjustments(String userId, Date date)
+    {
+        List<Action> allActions = new ArrayList<>();
+
+        List<Action> actions = getPopulatedActions(userId, getActions(userId, date));
+        for (Action action : actions)
+        {
+            allActions.add(action);
+            Action adjustment = action.getAdjustment();
+            if (adjustment != null) { allActions.add(adjustment); }
+        }
+
+        return allActions;
+    }
+
+
     public List<Action> getPopulatedActions(String userId)
     {
         return getPopulatedActions(userId, getActions(userId));
