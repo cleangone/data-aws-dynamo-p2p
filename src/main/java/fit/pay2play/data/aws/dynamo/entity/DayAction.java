@@ -3,6 +3,8 @@ package fit.pay2play.data.aws.dynamo.entity;
 import java.util.Calendar;
 import java.util.Date;
 
+import static fit.pay2play.data.aws.dynamo.entity.ActionType.*;
+
 // holds/sums both pay and play for a specific day.  Action is either pay or play
 public class DayAction
 {
@@ -19,8 +21,8 @@ public class DayAction
         calendar.setTime(date);
         yearAndDay = calendar.get(Calendar.YEAR) + "-" + calendar.get(Calendar.DAY_OF_YEAR);
 
-        if (action.isActionType(ActionType.Pay)) { pay = action.getTotalValue().doubleValue(); }
-        else if (action.isActionType(ActionType.Play)) { play = action.getTotalValue().doubleValue(); }
+        if (isPay(action.getActionType())) { pay = action.getTotalValue().doubleValue(); }
+        else if (isPlay(action.getActionType())) { play = action.getTotalValue().doubleValue(); }
     }
 
     public void add(DayAction that)

@@ -12,6 +12,7 @@ import java.math.RoundingMode;
 import java.util.Calendar;
 import java.util.Date;
 
+import static fit.pay2play.data.aws.dynamo.entity.ActionType.isPay;
 import static java.util.Objects.requireNonNull;
 
 @DynamoDBTable(tableName="Action")
@@ -27,13 +28,9 @@ public class Action extends BaseEntity
     private String actionCategoryId;
     private int amount;
 
-    // todo -  use of ActionCategory instead of other transient vars
-    protected String name;  // transient
-    protected String pluralName; // transient
-    protected ActionType actionType; // transient
-    private BigDecimal value; // transient
     private ActionCategory actionCategory; // transient
-    private boolean isAdjustment; // transient  // todo - ugly
+    private ActionType actionType; // transient - overrides ActionCategory.actionType for adjustments
+//    private boolean isAdjustment; // transient  // todo - ugly
 
     public Action()
     {
@@ -46,28 +43,25 @@ public class Action extends BaseEntity
         setUserId(requireNonNull(actionCategory).getUserId());
         setActionCategoryId(actionCategory.getId());
         setAmount(1);
+        setActionCategory(actionCategory);
     }
 
-    public void populate(ActionCategory actionCategory)
+    @DynamoDBIgnore
+    public void setActionCategory(ActionCategory actionCategory)
     {
         if (actionCategory == null) { return; }
-        if (!actionCategoryId.equals(actionCategory.getId())) { throw new RuntimeException("cannot populate Action with non-matching ActionType"); }
+        if (!actionCategoryId.equals(actionCategory.getId())) { throw new RuntimeException("Cannot populate Action with non-matching ActionType"); }
 
         this.actionCategory = actionCategory;
-        setName(actionCategory.getName());
-        setPluralName(actionCategory.getPluralName());
         setActionType(actionCategory.getActionType());
-        setValue(actionCategory.getValue());
     }
 
     @DynamoDBIgnore public String getDescription()
     {
-        // todo - ugly
-        if (isAdjustment)
+        // todo - semi-ugly
+        if (ActionType.isAdjustment(actionType))
         {
-            return getName() + " - Target " +
-                (actionCategory.isActionType(ActionType.Pay) ? "Min" : "Max") +
-                " Amount: " + actionCategory.getTargetAmount();
+            return getName() + " - Target Min Amount: " + actionCategory.getTargetAmount();
         }
 
         return amount + " " + (amount == 1 || getPluralName() == null ? getName() : getPluralName());
@@ -86,8 +80,7 @@ public class Action extends BaseEntity
         adjustment.setCreatedDate(getCreatedDate());
         adjustment.setUpdatedDate(getUpdatedDate());
         adjustment.setAmount(amount - actionCategory.getTargetAmount());
-        adjustment.populate(actionCategory);
-        adjustment.setAdjustment(true);
+        adjustment.setActionType(ActionType.PayAdjust);
 
         return adjustment;
     }
@@ -99,16 +92,8 @@ public class Action extends BaseEntity
 
     @DynamoDBIgnore public int getCreditAmount()
     {
-        int penalty = 0;
-//        if (actionCategory.isActionType(ActionType.Pay) && hasTargetAmount() && amount < actionCategory.getTargetAmount())
-//        {
-//            penalty = actionCategory.getTargetAmount() - amount;
-//        }
-
-        int adjustedAmount = amount - penalty;
-        return isActionType(ActionType.Pay) ? adjustedAmount : adjustedAmount * -1;
+        return isPay(actionType) ? amount : amount * -1;
     }
-
     @DynamoDBIgnore public boolean hasTargetAmount()
     {
         return actionCategory != null && actionCategory.getTargetAmount() != null && actionCategory.getTargetAmount() != 0;
@@ -121,7 +106,6 @@ public class Action extends BaseEntity
     {
         return this.actionType == actionType;
     }
-
     @DynamoDBIgnore public String getActionTypeDisplay()
     {
         return "" + actionType;
@@ -156,6 +140,38 @@ public class Action extends BaseEntity
         return (thisCreated.get(Calendar.YEAR) == dateCreated.get(Calendar.YEAR) &&
             thisCreated.get(Calendar.DAY_OF_YEAR) == dateCreated.get(Calendar.DAY_OF_YEAR));
     }
+
+    @DynamoDBIgnore public String getName() {
+        return actionCategory == null ? null : actionCategory.getName();
+    }
+    @DynamoDBIgnore public String getPluralName()
+    {
+        return actionCategory == null ? null : actionCategory.getPluralName();
+    }
+    @DynamoDBIgnore public BigDecimal getValue()
+    {
+        return actionCategory == null ? new BigDecimal(0)  : actionCategory.getValue();
+    }
+
+    @DynamoDBIgnore
+    public ActionType getActionType()
+    {
+        return actionType;
+    }
+    public void setActionType(ActionType actionType)
+    {
+        this.actionType = actionType;
+    }
+
+//    @DynamoDBIgnore
+//    public boolean isAdjustment()
+//    {
+//        return isAdjustment;
+//    }
+//    public void setAdjustment(boolean adjustment)
+//    {
+//        isAdjustment = adjustment;
+//    }
 
     public int getInt(EntityField field)
     {
@@ -197,54 +213,6 @@ public class Action extends BaseEntity
     public void setAmount(int amount)
     {
         this.amount = amount;
-    }
-
-    @DynamoDBIgnore
-    public String getName() {
-        return this.name;
-    }
-    public void setName(String name) {
-        this.name = name;
-    }
-
-    @DynamoDBIgnore
-    public String getPluralName()
-    {
-        return pluralName;
-    }
-    public void setPluralName(String pluralName)
-    {
-        this.pluralName = pluralName;
-    }
-
-    @DynamoDBIgnore
-    public ActionType getActionType()
-    {
-        return actionType;
-    }
-    public void setActionType(ActionType actionType)
-    {
-        this.actionType = actionType;
-    }
-
-    @DynamoDBIgnore
-    public BigDecimal getValue()
-    {
-        return value == null ? new BigDecimal(0) : value;
-    }
-    public void setValue(BigDecimal value)
-    {
-        this.value = value;
-    }
-
-    @DynamoDBIgnore
-    public boolean isAdjustment()
-    {
-        return isAdjustment;
-    }
-    public void setAdjustment(boolean adjustment)
-    {
-        isAdjustment = adjustment;
     }
 }
 

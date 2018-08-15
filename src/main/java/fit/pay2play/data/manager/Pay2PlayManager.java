@@ -82,12 +82,17 @@ public class Pay2PlayManager
     // TODO - may want to duplicate and update actions in background if pay/play updated
     //
 
-    // todo - need to add sep adjustment after anything with a min/max
     public List<Action> getActionsWithAdjustments(String userId, Date date)
+    {
+        List<Action> actions = getPopulatedActions(userId, getActions(userId, date));
+
+        return getActionsWithAdjustments(actions);
+    }
+
+    private List<Action> getActionsWithAdjustments(List<Action> actions)
     {
         List<Action> allActions = new ArrayList<>();
 
-        List<Action> actions = getPopulatedActions(userId, getActions(userId, date));
         for (Action action : actions)
         {
             allActions.add(action);
@@ -97,6 +102,8 @@ public class Pay2PlayManager
 
         return allActions;
     }
+
+
 
 
     public List<Action> getPopulatedActions(String userId)
@@ -116,7 +123,7 @@ public class Pay2PlayManager
         {
             if (action.getActionCategoryId() != null)
             {
-                action.populate(actionTypesById.get(action.getActionCategoryId()));
+                action.setActionCategory(actionTypesById.get(action.getActionCategoryId()));
             }
         }
 
@@ -179,7 +186,8 @@ public class Pay2PlayManager
     {
         Map<String, DayAction> dayActionByYearDay = new HashMap<>();
 
-        for (Action action : getPopulatedActions(userId))
+        List<Action> actions = getActionsWithAdjustments(getPopulatedActions(userId));
+        for (Action action : actions)
         {
             DayAction dayAction = new DayAction(action);
             if (dayActionByYearDay.containsKey(dayAction.getYearAndDay()))
